@@ -1,0 +1,12 @@
+{
+  "products": [
+    {
+      "id": "demo-print",
+      "name": "Example printing product",
+      "unit": "sheet",
+      "price": 0,
+      "currency": "EGP",
+      "note": "Synthetic placeholder; not a production price"
+    }
+  ]
+}

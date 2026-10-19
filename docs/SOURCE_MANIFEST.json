@@ -1,0 +1,258 @@
+[
+  {
+    "source": "dashboard/backend/server.cjs",
+    "published": "dashboard/backend/server.cjs"
+  },
+  {
+    "source": "dashboard/backend/scoring.cjs",
+    "published": "dashboard/backend/scoring.cjs"
+  },
+  {
+    "source": "dashboard/backend/ai-review.cjs",
+    "published": "dashboard/backend/ai-review.cjs"
+  },
+  {
+    "source": "dashboard/backend/management.cjs",
+    "published": "dashboard/backend/management.cjs"
+  },
+  {
+    "source": "dashboard/backend/backup.cjs",
+    "published": "dashboard/backend/backup.cjs"
+  },
+  {
+    "source": "dashboard/backend/evidence-snapshot.cjs",
+    "published": "dashboard/backend/evidence-snapshot.cjs"
+  },
+  {
+    "source": "dashboard/web/app.js",
+    "published": "dashboard/web/app.js"
+  },
+  {
+    "source": "dashboard/web/index.html",
+    "published": "dashboard/web/index.html"
+  },
+  {
+    "source": "dashboard/web/styles.css",
+    "published": "dashboard/web/styles.css"
+  },
+  {
+    "source": "dashboard/package.json",
+    "published": "dashboard/package.json"
+  },
+  {
+    "source": "dashboard/package-lock.json",
+    "published": "dashboard/package-lock.json"
+  },
+  {
+    "source": "dashboard/contracts/evaluation.schema.json",
+    "published": "dashboard/contracts/evaluation.schema.json"
+  },
+  {
+    "source": "dashboard/prompts/evaluate-conversation.md",
+    "published": "dashboard/prompts/evaluate-conversation.md"
+  },
+  {
+    "source": "dashboard/integrations/gemini/audit-media.cjs",
+    "published": "integrations/gemini/audit-media.cjs"
+  },
+  {
+    "source": "dashboard/integrations/gemini/sqlite-writer.cjs",
+    "published": "integrations/gemini/sqlite-writer.cjs"
+  },
+  {
+    "source": "dashboard/integrations/gemini/production-store.cjs",
+    "published": "integrations/gemini/production-store.cjs"
+  },
+  {
+    "source": "dashboard/integrations/gemini/prompt-addition.txt",
+    "published": "integrations/gemini/prompt-addition.txt"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer-server.js",
+    "published": "services/analyzer/server.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer-Dockerfile",
+    "published": "services/analyzer/Dockerfile"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer-package.json",
+    "published": "services/analyzer/package.json"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler-server.js",
+    "published": "services/media-bundler/server.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler-Dockerfile",
+    "published": "services/media-bundler/Dockerfile"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler-package.json",
+    "published": "services/media-bundler/package.json"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler.dockerignore",
+    "published": "services/media-bundler/.dockerignore"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/archive.js",
+    "published": "services/analyzer/lib/archive.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/design-tools.js",
+    "published": "services/analyzer/lib/design-tools.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/detect.js",
+    "published": "services/analyzer/lib/detect.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/egypt-gov.js",
+    "published": "services/analyzer/lib/egypt-gov.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/filehosts.js",
+    "published": "services/analyzer/lib/filehosts.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/gemini.js",
+    "published": "services/analyzer/lib/gemini.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/google-drive.js",
+    "published": "services/analyzer/lib/google-drive.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/image.js",
+    "published": "services/analyzer/lib/image.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/link.js",
+    "published": "services/analyzer/lib/link.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/longtail.js",
+    "published": "services/analyzer/lib/longtail.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/ocr.js",
+    "published": "services/analyzer/lib/ocr.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/office.js",
+    "published": "services/analyzer/lib/office.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/payments.js",
+    "published": "services/analyzer/lib/payments.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/pdf.js",
+    "published": "services/analyzer/lib/pdf.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/pinterest.js",
+    "published": "services/analyzer/lib/pinterest.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/shortlinks.js",
+    "published": "services/analyzer/lib/shortlinks.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/social-media.js",
+    "published": "services/analyzer/lib/social-media.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/text.js",
+    "published": "services/analyzer/lib/text.js"
+  },
+  {
+    "source": "Project_Context/Microservices/analyzer_lib/video.js",
+    "published": "services/analyzer/lib/video.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/archive.js",
+    "published": "services/media-bundler/lib/archive.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/cleanup.js",
+    "published": "services/media-bundler/lib/cleanup.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/dedup.js",
+    "published": "services/media-bundler/lib/dedup.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/design-tools.js",
+    "published": "services/media-bundler/lib/design-tools.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/detect.js",
+    "published": "services/media-bundler/lib/detect.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/downloader.js",
+    "published": "services/media-bundler/lib/downloader.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/filehosts.js",
+    "published": "services/media-bundler/lib/filehosts.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/filename.js",
+    "published": "services/media-bundler/lib/filename.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/google-drive.js",
+    "published": "services/media-bundler/lib/google-drive.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/link.js",
+    "published": "services/media-bundler/lib/link.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/shortlinks.js",
+    "published": "services/media-bundler/lib/shortlinks.js"
+  },
+  {
+    "source": "Project_Context/Microservices/media-bundler_lib/zipper.js",
+    "published": "services/media-bundler/lib/zipper.js"
+  },
+  {
+    "source": "Project_Context/Microservices/uploader/Dockerfile",
+    "published": "services/uploader/Dockerfile"
+  },
+  {
+    "source": "Project_Context/Microservices/uploader/main.go",
+    "published": "services/uploader/main.go"
+  },
+  {
+    "source": "Project_Context/Custom_Scripts/reassign_all.rb",
+    "published": "automation/routing/reassign_all.rb"
+  },
+  {
+    "source": "Project_Context/Custom_Scripts/reassign_all.sh",
+    "published": "automation/routing/reassign_all.sh"
+  },
+  {
+    "source": "Project_Context/Custom_Scripts/08_auto_resolve_snoozed_cron.sh",
+    "published": "automation/routing/08_auto_resolve_snoozed_cron.sh"
+  },
+  {
+    "source": "Project_Context/N8N_Files/bot_state_v2.js",
+    "published": "automation/lib/bot_state_v2.js"
+  },
+  {
+    "source": "Project_Context/N8N_Files/token_tracker.js",
+    "published": "automation/lib/token_tracker.js"
+  },
+  {
+    "source": "Project_Context/N8N_Files/convert-prices.js",
+    "published": "automation/lib/convert-prices.js"
+  },
+  {
+    "source": "Project_Context/N8N_Files/price_search_lib.js",
+    "published": "automation/lib/price_search_lib.js"
+  }
+]

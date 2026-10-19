@@ -1,0 +1,225 @@
+{
+  "name": "analyze_media_new",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "msg_id"
+            },
+            {
+              "name": "reason"
+            },
+            {
+              "name": "attachment_index",
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        -176
+      ],
+      "id": "ca6a5d9e-45c9-41a3-ae6b-2f88fee92b29",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const S = require('/files/bot_state_v2.js');\nconst input = $input.first().json;\n\nconst raw_msg_id = String(input.msg_id || '').trim();\nconst attachmentIndex = input.attachment_index == null ? 0 : Number(input.attachment_index);\nif (!Number.isInteger(attachmentIndex) || attachmentIndex < 0) return [{json:{error:'attachment_index_invalid'}}];\nconst reason = String(input.reason || '').trim();\nconst msg_id = raw_msg_id.replace(/^msg_/, '');\n\nif (!msg_id) {\n  return [{ json: { error: 'msg_id_required', received: raw_msg_id } }];\n}\n\n// Find contactKey + media via ct:* scan\nconst result = await S.run(async r => {\n  const keys = [];\n  let cursor = '0';\n  do {\n    const [nc, batch] = await r.scan(cursor, 'MATCH', 'ct:*', 'COUNT', 100);\n    cursor = nc;\n    keys.push(...batch);\n  } while (cursor !== '0');\n\n  for (const fullKey of keys) {\n    const raw = await r.get(fullKey);\n    if (!raw) continue;\n    try {\n      const st = JSON.parse(raw);\n      const arr = (st.media && st.media.urls) || [];\n      const matches = arr.filter(m => String(m.msgId) === msg_id);\n      if (matches.length) return { contactKey: fullKey.replace(/^ct:/, ''), media: matches[attachmentIndex], attachmentCount: matches.length };\n    } catch(e) {}\n  }\n  return null;\n});\n\nif (!result) {\n  return [{ json: { error: 'media_not_found', msg_id } }];\n}\n\nconst { contactKey, media, attachmentCount } = result;\nif (!media) return [{json:{error:'attachment_index_out_of_range',msg_id,attachmentIndex,attachmentCount}}];\n\n// Rate limit (20/contact/hour)\nconst rlKey = 'rate:analyze:' + contactKey;\nconst rlCount = await S.run(r => r.incr(rlKey));\nif (rlCount === 1) await S.run(r => r.expire(rlKey, 3600));\nif (rlCount > 20) {\n  return [{ json: { error: 'rate_limit_exceeded', count: rlCount, contactKey } }];\n}\n\n// Cache check\nconst cacheKey = 'analysis:media:' + msg_id + ':' + attachmentIndex;\nconst cached = await S.run(r => r.get(cacheKey));\nif (cached) {\n  try {\n    return [{ json: { cached: true, analysis: JSON.parse(cached), contactKey, msg_id, reason, attachmentIndex, attachmentCount } }];\n  } catch(e) {}\n}\n\nreturn [{\n  json: {\n    msg_id,\n    attachmentIndex,\n    attachmentCount,\n    reason,\n    contactKey,\n    url: media.url,\n    media_type: media.type,\n    media_name: media.name\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -176
+      ],
+      "id": "e27ecb68-517d-43bd-871f-5841f83c1242",
+      "name": "Prepare Media"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.cached }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        -176
+      ],
+      "id": "5334f7e9-0738-4dad-953c-0f5e3bd3657f",
+      "name": "IF: Cache Hit?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://analyzer-service:3456/analyze",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "contactKey",
+              "value": "={{ $json.contactKey }}"
+            },
+            {
+              "name": "msgId",
+              "value": "={{ $json.msg_id }}"
+            },
+            {
+              "name": "attachmentIndex",
+              "value": "={{ $json.attachmentIndex || 0 }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 180000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        -80
+      ],
+      "id": "c9ab84ac-4d3e-42ba-bb05-9c00b6125b84",
+      "name": "Analyze",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const S = require('/files/bot_state_v2.js');\nconst prep = $('Capture Audit').first().json.prep;\nconst input = $('Capture Audit').first().json.input;\n\n// ─────────────────────────────────────────────────────────\n// Helper: map analysis output to media type\n// ─────────────────────────────────────────────────────────\nfunction detectedType(analysis) {\n  if (!analysis) return 'file';\n  if (analysis.from_video) return 'video';\n  if (analysis.from_image) return 'image';\n  if (analysis.from_pdf) return 'pdf';\n  if (analysis.from_doc) return 'doc';\n  if (analysis.from_text) return 'text';\n  if (analysis.from_archive) return 'archive';\n  if (analysis.from_link) return 'link';\n  if (['image','photo','design','screenshot'].includes(analysis.type)) return 'image';\n  if (analysis.type === 'document') return 'doc';\n  return 'file';\n}\n\n// ── Cache hit path ──\nif (prep.cached) {\n  const analysis = prep.analysis;\n  if (!analysis || analysis.error || analysis.ok === false) return [{json:{error:'invalid_cached_analysis',msg_id:prep.msg_id}}];\n  if (prep.contactKey && analysis) {\n    await S.run(r => S.update(r, prep.contactKey, st => {\n      const arr = (st.media && st.media.urls) || [];\n      const matches = arr.filter(m => String(m.msgId) === prep.msg_id);\n      const target = matches[prep.attachmentIndex || 0];\n      const i = target ? arr.indexOf(target) : -1;\n      if (i >= 0 && !arr[i].analyzed) {\n        arr[i].analyzed = analysis;\n        arr[i].analyzedAt = Date.now();\n        arr[i].analyzedReason = prep.reason || 'cache_heal';\n        // Refine the media type based on actual analysis\n        arr[i].type = detectedType(analysis);\n        if (analysis.pages)  arr[i].pages  = analysis.pages;\n        if (analysis.slides) arr[i].slides = analysis.slides;\n        if (analysis.sheets) arr[i].sheets = analysis.sheets;\n      }\n      if (st.pendingInternalMedia) {\n        const internalPending = arr.filter(m => m.source === 'internal_note' && !m.analyzed).length;\n        if (internalPending === 0) st.pendingInternalMedia = false;\n      }\n      return st;\n    }));\n  }\n  return [{ json: analysis }];\n}\n\n// ── Error paths ──\nif (prep.error) return [{ json: prep }];\nif (input.error) {\n  return [{ json: { error: input.error, detail: input.detail || null, contactKey: prep.contactKey, msg_id: prep.msg_id } }];\n}\nif (!input.success) {\n  return [{ json: { error: input.error || 'analyzer_failed', contactKey: prep.contactKey, msg_id: prep.msg_id } }];\n}\n\nconst analysis = input.analysis;\nif (!analysis || typeof analysis !== 'object' || Array.isArray(analysis) || analysis.error || analysis.ok === false) {\n  return [{ json: { error: 'no_analysis_from_service', contactKey: prep.contactKey, msg_id: prep.msg_id } }];\n}\n\n// ── Cache ──\nconst cacheKey = 'analysis:media:' + prep.msg_id + ':' + (prep.attachmentIndex || 0);\nawait S.run(r => r.set(cacheKey, JSON.stringify(analysis), 'EX', 86400));\n\n// ── Write back to state ──\nif (prep.contactKey) {\n  await S.run(r => S.update(r, prep.contactKey, st => {\n    const arr = (st.media && st.media.urls) || [];\n    const matches = arr.filter(m => String(m.msgId) === prep.msg_id);\n      const target = matches[prep.attachmentIndex || 0];\n      const i = target ? arr.indexOf(target) : -1;\n    if (i >= 0) {\n      arr[i].analyzed = analysis;\n      arr[i].analyzedAt = Date.now();\n      arr[i].analyzedReason = prep.reason;\n      // Refine the media type based on actual analysis\n      arr[i].type = detectedType(analysis);\n      if (analysis.pages)  arr[i].pages  = analysis.pages;\n      if (analysis.slides) arr[i].slides = analysis.slides;\n      if (analysis.sheets) arr[i].sheets = analysis.sheets;\n    }\n    if (st.pendingInternalMedia) {\n      const internalPending = arr.filter(m => m.source === 'internal_note' && !m.analyzed).length;\n      if (internalPending === 0) st.pendingInternalMedia = false;\n    }\n    return st;\n  }));\n}\n\n// ── Log event ──\nif (prep.contactKey) {\n  await S.run(r => S.logEvent(r, prep.contactKey, 'media_analyzed', {\n    msg_id: prep.msg_id,\n    type: analysis.type,\n    pages: analysis.pages || null,\n    reason: prep.reason\n  }));\n}\n\nreturn [{ json: analysis }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -176
+      ],
+      "id": "6e281920-0aec-4561-89d3-17de6e741467",
+      "name": "Cache & Return"
+    },
+    {
+      "id": "c8d2c4a6-6335-44ac-909e-af4ef291ae9d",
+      "name": "Capture Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -176
+      ],
+      "parameters": {
+        "jsCode": "\nlet prep = $('Prepare Media').first().json;\nlet input = $input.first().json;\ntry {\n  const { captureAudit } = require('/files/audit-media/audit-media.cjs');\n  const { writeEvidence } = require('/files/audit-media/production-store.cjs');\n  const analysis = prep.cached ? prep.analysis : input.analysis;\n  if (analysis && !prep.error && (prep.cached || input.success)) {\n    const captured = await captureAudit({ analysis, accountId: 2, messageId: prep.msg_id,\n      attachmentIndex: prep.attachmentIndex || 0,\n      write: record => writeEvidence(record, '/files/audit-media/data/evidence.sqlite') });\n    if (prep.cached) prep = { ...prep, analysis: captured.analysis };\n    else input = { ...input, analysis: captured.analysis };\n    if (!captured.stored) console.log('[audit] evidence not stored: ' + captured.reason);\n  }\n} catch (_) {\n  // Strip reserved fields even when the module cannot load; no customer error.\n  const strip = v => Array.isArray(v) ? v.map(strip) : v && typeof v === 'object'\n    ? Object.fromEntries(Object.entries(v).filter(([k])=>k!=='_audit').map(([k,x])=>[k,strip(x)])) : v;\n  prep = strip(prep); input = strip(input);\n  console.log('[audit] capture unavailable');\n}\nreturn [{json:{prep,input}}];\n"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Media",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Media": {
+      "main": [
+        [
+          {
+            "node": "IF: Cache Hit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Cache Hit?": {
+      "main": [
+        [
+          {
+            "node": "Capture Audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze": {
+      "main": [
+        [
+          {
+            "node": "Capture Audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Audit": {
+      "main": [
+        [
+          {
+            "node": "Cache & Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

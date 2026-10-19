@@ -1,0 +1,103 @@
+{
+  "name": "Token Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "59 23 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        160,
+        -272
+      ],
+      "id": "4b7aecbb-371a-4a37-8aa0-920cb185acb4",
+      "name": "Daily Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const Redis = require('/files/node_modules/ioredis');\nconst fs = require('fs');\nconst cfg = JSON.parse(fs.readFileSync('/files/redis.json', 'utf8'));\n\nconst r = new Redis({\n  host: cfg.host || 'botredis',\n  port: cfg.port || 6379,\n  password: cfg.password,\n  connectTimeout: 4000,\n  maxRetriesPerRequest: 2\n});\nr.on('error', () => {});\n\nfunction dayKey(offsetDays = 0) {\n  const d = new Date(Date.now() + offsetDays * 86400000);\n  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;\n}\nfunction monthKey(offsetDays = 0) {\n  const d = new Date(Date.now() + offsetDays * 86400000);\n  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;\n}\n\n// ─────────────────────────────────────────────────────────\n// Phone numbers (WhatsApp Business) — for per-number billing\n// ─────────────────────────────────────────────────────────\nconst PHONE_NUMBERS = [\n  { inboxId: 10, phoneNumberId: '1111231948738550', label: '01000000000' },\n  { inboxId: 11, phoneNumberId: '1015579888315502', label: '01000000000' },\n  { inboxId: 12, phoneNumberId: '963488543523802',  label: '01000000000' },\n  { inboxId: 16, phoneNumberId: '1123949100810776', label: 'VIP (01000000000)' },\n  { inboxId: 19, phoneNumberId: '1243217355535246', label: 'صالة (01000000000)' }\n];\n\nconst META_SERVICE_RATE_USD = 0.0036;\nconst META_FREE_PER_NUMBER_MONTHLY = 1000;\n\n// ─────────────────────────────────────────────────────────\n// Read token totals for a day\n// ─────────────────────────────────────────────────────────\nasync function sumTokensForDay(day) {\n  const keys = new Set();\n  let cursor = '0';\n  do {\n    const [nc, batch] = await r.scan(cursor, 'MATCH', `tokens:daily:${day}:*`, 'COUNT', 200);\n    cursor = nc;\n    batch.forEach(k => keys.add(k));\n  } while (cursor !== '0');\n\n  const byMode = {};\n  const byModel = {};\n  let grandPrompt = 0, grandCompletion = 0, grandRequests = 0, grandCostMicro = 0;\n\n  for (const k of keys) {\n    const val = Number(await r.get(k)) || 0;\n    const parts = k.split(':');\n    const provider = parts[3];\n    const mode = parts[4];\n\n    // Model-level keys: parts[5]=\"model\", parts[6]=<modelName>, parts[7]=<field>\n    if (parts[5] === 'model' && parts.length >= 8) {\n      const model = parts[6];\n      const field = parts[7];\n      const bucket = `${provider}:${mode}:${model}`;\n      if (!byModel[bucket]) byModel[bucket] = { prompt: 0, completion: 0, requests: 0, costMicro: 0, audioSeconds: 0 };\n      if (field === 'prompt') byModel[bucket].prompt += val;\n      else if (field === 'completion') byModel[bucket].completion += val;\n      else if (field === 'requests') byModel[bucket].requests += val;\n      else if (field === 'costMicro') byModel[bucket].costMicro += val;\n      else if (field === 'audioSeconds') byModel[bucket].audioSeconds += val;\n      continue;\n    }\n\n    const suffix = parts.slice(5).join(':');\n    const bucket = `${provider}:${mode}`;\n    if (!byMode[bucket]) byMode[bucket] = { prompt: 0, completion: 0, requests: 0, costMicro: 0, audioSeconds: 0 };\n    if (suffix === 'prompt') { byMode[bucket].prompt += val; grandPrompt += val; }\n    else if (suffix === 'completion') { byMode[bucket].completion += val; grandCompletion += val; }\n    else if (suffix === 'requests') { byMode[bucket].requests += val; grandRequests += val; }\n    else if (suffix === 'costMicro') { byMode[bucket].costMicro += val; grandCostMicro += val; }\n    else if (suffix === 'audioSeconds') byMode[bucket].audioSeconds += val;\n  }\n\n  return {\n    byMode, byModel,\n    grandPrompt, grandCompletion, grandRequests, grandCostMicro,\n    grandTotal: grandPrompt + grandCompletion,\n    grandCostUSD: grandCostMicro / 1_000_000\n  };\n}\n\n// ─────────────────────────────────────────────────────────\n// Meta usage — per phone number\n// ─────────────────────────────────────────────────────────\nasync function readMetaUsage(day, month) {\n  const dailySent      = Number(await r.get(`msgcount:daily:${day}:sent`)) || 0;\n  const monthlyService = Number(await r.get(`msgcount:monthly:${month}:service`)) || 0;\n\n  const perNumber = [];\n  let totalBillable = 0;\n  let totalCostUSD = 0;\n\n  for (const { inboxId, phoneNumberId, label } of PHONE_NUMBERS) {\n    const monthCount = Number(await r.get(`msgcount:monthly:${month}:phone:${phoneNumberId}:service`)) || 0;\n    const dailyCount = Number(await r.get(`msgcount:daily:${day}:phone:${phoneNumberId}:sent`)) || 0;\n\n    const billable = Math.max(0, monthCount - META_FREE_PER_NUMBER_MONTHLY);\n    const cost = billable * META_SERVICE_RATE_USD;\n\n    perNumber.push({\n      inboxId, phoneNumberId, label,\n      monthCount, dailyCount,\n      billable,\n      costUSD: cost\n    });\n\n    totalBillable += billable;\n    totalCostUSD += cost;\n  }\n\n  return {\n    dailySent,\n    monthlyService,\n    perNumber,\n    totalBillable,\n    totalCostUSD\n  };\n}\n\n// ─────────────────────────────────────────────────────────\n// Main\n// ─────────────────────────────────────────────────────────\nconst today = dayKey(0);\nconst yesterday = dayKey(-1);\nconst thisMonth = monthKey(0);\n\nconst t = await sumTokensForDay(today);\nconst y = await sumTokensForDay(yesterday);\nconst meta = await readMetaUsage(today, thisMonth);\n\n// ─────────────────────────────────────────────────────────\n// Build report\n// ─────────────────────────────────────────────────────────\nconst lines = [];\nlines.push(`📊 Daily Report — ${today}`);\nlines.push('');\n\nlines.push('🤖 AI Usage');\nlines.push(`Input tokens:  ${t.grandPrompt.toLocaleString()}`);\nlines.push(`Output tokens: ${t.grandCompletion.toLocaleString()}`);\nlines.push(`AI requests:   ${t.grandRequests.toLocaleString()}`);\nlines.push(`AI cost (USD): $${t.grandCostUSD.toFixed(4)}`);\nlines.push('');\n\nif (Object.keys(t.byModel).length > 0) {\n  lines.push('🧠 By Model');\n  for (const [bucket, data] of Object.entries(t.byModel).sort((a,b) => b[1].costMicro - a[1].costMicro)) {\n    lines.push(`- ${bucket}`);\n    lines.push(`  in ${data.prompt} / out ${data.completion} / req ${data.requests} / $${(data.costMicro/1_000_000).toFixed(4)}`);\n    if (data.audioSeconds > 0) lines.push(`  audio ${data.audioSeconds}s`);\n  }\n  lines.push('');\n}\n\nlines.push('📤 WhatsApp Messages');\nlines.push(`Sent today (all numbers): ${meta.dailySent}`);\nlines.push(`Sent this month (all):    ${meta.monthlyService}`);\nlines.push('');\nlines.push('Per number (this month):');\n\nfor (const n of meta.perNumber) {\n  const status = n.billable > 0 ? `billable=${n.billable} cost=$${n.costUSD.toFixed(4)}` : 'within free tier';\n  lines.push(`  ${n.label}`);\n  lines.push(`    sent=${n.monthCount}  ${status}`);\n}\n\nlines.push('');\nlines.push(`Total billable:      ${meta.totalBillable}`);\nlines.push(`Total Meta cost:     $${meta.totalCostUSD.toFixed(4)}`);\nlines.push(`Free tier per number: ${META_FREE_PER_NUMBER_MONTHLY} messages`);\nlines.push('');\n\nlines.push(`Yesterday (${yesterday}):`);\nlines.push(`  AI: ${y.grandTotal} tokens / ${y.grandRequests} req / $${y.grandCostUSD.toFixed(4)}`);\nif (y.grandTotal > 0 && t.grandTotal > 0) {\n  const diff = ((t.grandTotal - y.grandTotal) / y.grandTotal * 100).toFixed(1);\n  const arrow = diff > 0 ? '📈' : diff < 0 ? '📉' : '➡️';\n  lines.push(`  Token change: ${arrow} ${diff}%`);\n}\n\nlines.push('');\nlines.push('ℹ️ Notes:');\nlines.push('- Token cost is per-model, computed at log time.');\nlines.push(`- Meta: ${META_FREE_PER_NUMBER_MONTHLY} free service messages per phone number per month.`);\nlines.push(`- Rate: $${META_SERVICE_RATE_USD} per service message after the free tier.`);\nlines.push('- Incoming customer messages are always free.');\n\nawait r.set(`reports:daily:${today}`, JSON.stringify({\n  tokens: t, meta, generatedAt: Date.now()\n}), 'EX', 7776000);\n\nr.disconnect();\n\nreturn [{\n  json: { report: lines.join('\\n'), raw: { tokens: t, meta, yesterday: y } }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -272
+      ],
+      "id": "33e97384-1a96-45d0-b601-1be0a28f88a3",
+      "name": "Build Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ntfy.sh/elazazyserver",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Title",
+              "value": "📊 Daily Token Report"
+            },
+            {
+              "name": "Priority",
+              "value": "3"
+            },
+            {
+              "name": "Tags",
+              "value": "chart_with_upwards_trend"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.report, title: '📊 Daily Token Report', priority: 3, tags: ['chart_with_upwards_trend'] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        608,
+        -272
+      ],
+      "id": "1d93981b-a9fa-4f76-847a-6144b66732b0",
+      "name": "Send to ntfy"
+    }
+  ],
+  "connections": {
+    "Daily Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Send to ntfy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

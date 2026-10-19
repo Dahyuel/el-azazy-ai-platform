@@ -1,0 +1,6 @@
+'use strict';
+// Runs beside the existing evidence store. Reads its database; writes only new dashboard snapshot files.
+const fs=require('node:fs'),path=require('node:path');
+const {DatabaseSync,backup}=require('node:sqlite');
+const directory='/files/audit-media/data',source=path.join(directory,'evidence.sqlite'),target=path.join(directory,'dashboard-evidence.sqlite'),temporary=path.join(directory,'dashboard-evidence-'+process.pid+'.tmp');
+(async()=>{const db=new DatabaseSync(source,{readOnly:true});try{await backup(db,temporary)}finally{db.close()}const copy=new DatabaseSync(temporary);try{copy.exec('PRAGMA journal_mode=DELETE');if(Object.values(copy.prepare('PRAGMA integrity_check').get())[0]!=='ok')throw Error('SNAPSHOT_INTEGRITY')}finally{copy.close()}fs.chmodSync(temporary,0o600);fs.renameSync(temporary,target);const metadata=path.join(directory,'dashboard-evidence.json');fs.writeFileSync(metadata+'.tmp',JSON.stringify({created_at:new Date().toISOString(),interval_minutes:30}),{mode:0o600});fs.renameSync(metadata+'.tmp',metadata);console.log('Dashboard evidence snapshot refreshed')})().catch(()=>{console.error('Dashboard evidence snapshot failed');process.exitCode=1}).finally(()=>{try{fs.unlinkSync(temporary)}catch(_){}});

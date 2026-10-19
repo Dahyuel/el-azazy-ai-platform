@@ -1,0 +1,336 @@
+{
+  "name": "action_executor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1584,
+        480
+      ],
+      "id": "f3c1668b-770a-4a9c-9dcd-b2dc51e9a6c5",
+      "name": "Every 1 Min"
+    },
+    {
+      "parameters": {
+        "jsCode": "const Redis = require('/files/node_modules/ioredis');\nconst fs = require('fs');\nconst cfg = JSON.parse(fs.readFileSync('/files/redis.json', 'utf8'));\n\nconst MAX_PER_RUN = 20;\n\nconst actions = await (async () => {\n  const r = new Redis({\n    host: cfg.host || 'botredis',\n    port: cfg.port || 6379,\n    password: cfg.password,\n    connectTimeout: 4000,\n    maxRetriesPerRequest: 2\n  });\n  r.on('error', () => {});\n  try {\n    const out = [];\n    for (let i = 0; i < MAX_PER_RUN; i++) {\n      const raw = await r.lpop('pending_actions');\n      if (!raw) break;\n      try {\n        const obj = JSON.parse(raw);\n        out.push({ json: obj });\n      } catch (e) {}\n    }\n    return out;\n  } finally {\n    r.disconnect();\n  }\n})();\n\nreturn actions;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        480
+      ],
+      "id": "864f73e6-982c-42c7-bbd2-6936196d4b6b",
+      "name": "Pop Actions"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ae-c1",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "post_note",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1136,
+        480
+      ],
+      "id": "18c93593-3b75-4ca4-a15d-62d141700017",
+      "name": "IF: Post Note?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/api/v1/accounts/{{ $json.accountId }}/conversations/{{ $json.conversationId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Forwarded-Proto",
+              "value": "https"
+            },
+            {
+              "name": "X-Forwarded-Ssl",
+              "value": "on"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.content, message_type: 'outgoing', private: true }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -912,
+        384
+      ],
+      "id": "60ee3657-af4d-4d4a-8c01-658e5bc25f0e",
+      "name": "Post Private Note",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ae-c2",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "set_label",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -912,
+        576
+      ],
+      "id": "ebaeca41-cd01-4cbb-924c-1a0672fbccbd",
+      "name": "IF: Set Label?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/api/v1/accounts/{{ $json.accountId }}/conversations/{{ $json.conversationId }}/labels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Forwarded-Proto",
+              "value": "https"
+            },
+            {
+              "name": "X-Forwarded-Ssl",
+              "value": "on"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ labels: [$json.label] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -688,
+        480
+      ],
+      "id": "f0a57ddf-7def-4512-9379-141e57d691ff",
+      "name": "Set Label",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ae-c3",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "toggle_status",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -688,
+        672
+      ],
+      "id": "3ddb2b44-78b9-44ee-8da5-1a217f7e4030",
+      "name": "IF: Toggle Status?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.baseUrl }}/api/v1/accounts/{{ $json.accountId }}/conversations/{{ $json.conversationId }}/toggle_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Forwarded-Proto",
+              "value": "https"
+            },
+            {
+              "name": "X-Forwarded-Ssl",
+              "value": "on"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: $json.status }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -464,
+        576
+      ],
+      "id": "6a5d2789-01a7-4a88-b7e0-eabc81ff4a31",
+      "name": "Toggle Status",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        768
+      ],
+      "id": "27b94006-90b0-40a0-b013-d6946c8d278a",
+      "name": "No Op"
+    }
+  ],
+  "connections": {
+    "Every 1 Min": {
+      "main": [
+        [
+          {
+            "node": "Pop Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pop Actions": {
+      "main": [
+        [
+          {
+            "node": "IF: Post Note?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Post Note?": {
+      "main": [
+        [
+          {
+            "node": "Post Private Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF: Set Label?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Set Label?": {
+      "main": [
+        [
+          {
+            "node": "Set Label",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF: Toggle Status?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Toggle Status?": {
+      "main": [
+        [
+          {
+            "node": "Toggle Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

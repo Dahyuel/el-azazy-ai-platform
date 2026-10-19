@@ -1,0 +1,21 @@
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*credentials*
+node_modules/
+data/
+backups/
+recovery/
+*.sqlite*
+*.db
+*.azb
+*.zip
+*.tar.gz
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db
